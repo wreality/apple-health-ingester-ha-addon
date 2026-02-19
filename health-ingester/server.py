@@ -4,7 +4,7 @@ import logging
 import os
 from datetime import datetime, timezone
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Header, HTTPException, Request
 from influxdb_client import InfluxDBClient, Point, WritePrecision
 from influxdb_client.client.write_api import SYNCHRONOUS
 
@@ -15,6 +15,7 @@ INFLUXDB_URL = os.environ.get("INFLUXDB_URL", "http://localhost:8086")
 INFLUXDB_TOKEN = os.environ.get("INFLUXDB_TOKEN", "")
 INFLUXDB_ORG = os.environ.get("INFLUXDB_ORG", "homeassistant")
 INFLUXDB_BUCKET = os.environ.get("INFLUXDB_BUCKET", "health")
+API_KEY = os.environ.get("API_KEY", "")
 INGRESS_PATH = os.environ.get("INGRESS_PATH", "")
 
 # Fields that are not numeric values — skip when building InfluxDB points
@@ -23,6 +24,19 @@ SKIP_FIELDS = {"date", "source"}
 STRING_FIELDS = {"inBedStart", "inBedEnd", "sleepStart", "sleepEnd"}
 
 app = FastAPI(title="Health Data Ingester", root_path=INGRESS_PATH)
+
+
+def verify_api_key(authorization: str | None = None, x_api_key: str | None = None):
+    """Validate the request carries a valid API key."""
+    if not API_KEY:
+        return  # No key configured — allow all (dev/testing)
+    token = None
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization[7:]
+    elif x_api_key:
+        token = x_api_key
+    if token != API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
 
 def parse_timestamp(date_str: str) -> datetime:
@@ -90,7 +104,13 @@ async def healthcheck():
 
 @app.post("/api/ingest")
 @app.post("/ingest")
-async def ingest(request: Request):
+async def ingest(
+    request: Request,
+    authorization: str | None = Header(None),
+    x_api_key: str | None = Header(None, alias="X-API-Key"),
+):
+    verify_api_key(authorization, x_api_key)
+
     body = await request.json()
     data = body.get("data", {})
     metrics = data.get("metrics", [])

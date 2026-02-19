@@ -6,8 +6,7 @@ A Home Assistant add-on that receives Apple Health data from the [Health Auto Ex
 
 - **Write-only** — accepts health data ingestion, never exposes existing data
 - **Generic metric handling** — supports all Apple Health metrics without special-casing
-- **HA Ingress** — no exposed ports; all traffic authenticated by Home Assistant
-- **Nabu Casa ready** — accessible remotely with a long-lived access token
+- **Simple auth** — Bearer token authentication on the ingest endpoint
 
 ## Installation
 
@@ -30,24 +29,24 @@ A Home Assistant add-on that receives Apple Health data from the [Health Auto Ex
 | `influxdb_token` | Write-only API token for InfluxDB |
 | `influxdb_org` | InfluxDB organization (default: `homeassistant`) |
 | `influxdb_bucket` | Target bucket name (default: `health`) |
+| `api_key` | Bearer token to authenticate incoming requests |
 
 ## Health Auto Export App Setup
 
-1. Create a **long-lived access token** in HA (Profile → Long-Lived Access Tokens)
-2. Find your **ingress URL** by opening the add-on's Web UI and noting the URL
-3. In the iOS app, configure a REST API automation:
+In the iOS app, configure a REST API automation:
 
 | Setting | Value |
 |---------|-------|
-| URL | `https://<nabu-casa-url>/api/hassio_ingress/<token>/ingest` |
+| URL | `http://<ha-ip>:8099/api/ingest` |
 | Method | POST |
-| Headers | `Authorization: Bearer <ha_long_lived_token>` |
+| Headers | `Authorization: Bearer <your_api_key>` |
 | Body | JSON |
+
+The HA IP can be a LAN address or VPN address (Netbird, Tailscale, WireGuard).
 
 ## Security
 
-- **No exposed ports** — all traffic flows through HA ingress
-- **HA authentication** — every request must carry a valid HA access token
-- **Write-only** — no endpoints exist to query or read back health data
-- **InfluxDB token** should be scoped to write-only access
-- **End-to-end encryption** via Nabu Casa when accessed remotely
+- No query/read endpoints exist
+- InfluxDB token should be scoped to write-only
+- All ingest requests require a valid API key
+- No InfluxDB query API is proxied

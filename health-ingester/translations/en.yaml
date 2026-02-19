@@ -11,3 +11,6 @@ configuration:
   influxdb_bucket:
     name: InfluxDB Bucket
     description: Bucket name for health data
+  api_key:
+    name: API Key
+    description: Bearer token for authenticating incoming requests
