@@ -29,19 +29,71 @@ In the add-on config:
 | InfluxDB Bucket | `health` |
 | API Key | A secret string of your choice — used to authenticate requests from the iOS app |
 
-### 4. Health Auto Export iOS App
+### 4. Remote Access via Nabu Casa Webhook
+
+To receive data from the Health Auto Export app remotely (outside your LAN), set up an HA webhook that forwards to the add-on.
+
+**Step 1:** Add a `rest_command` to your `configuration.yaml`:
+
+```yaml
+rest_command:
+  forward_health_data:
+    url: "http://localhost:8099/api/ingest"
+    method: POST
+    headers:
+      Authorization: "Bearer YOUR_API_KEY"
+      Content-Type: "application/json"
+    payload: '{{ trigger_data }}'
+    content_type: "application/json"
+```
+
+**Step 2:** Create an automation (Settings → Automations → Create):
+
+```yaml
+alias: Health Data Webhook
+trigger:
+  - platform: webhook
+    webhook_id: health_data_ingest
+    allowed_methods:
+      - POST
+    local_only: false
+action:
+  - service: rest_command.forward_health_data
+    data:
+      trigger_data: "{{ trigger.data | tojson }}"
+mode: single
+```
+
+**Step 3:** Restart HA to load the `rest_command`.
+
+Your webhook URL is now:
+```
+https://<your-nabu-casa-url>/api/webhook/health_data_ingest
+```
+
+### 5. Health Auto Export iOS App
 
 In the app, configure a REST API automation:
 
+**Via Nabu Casa webhook (remote):**
+
 | Setting | Value |
 |---------|-------|
-| URL | `https://<your-nabu-casa-url>/api/hassio_ingress/<ingress_token>/api/ingest` |
+| URL | `https://<nabu-casa-url>/api/webhook/health_data_ingest` |
+| Method | POST |
+| Headers | _(none needed — webhook ID acts as auth)_ |
+| Body | JSON |
+| Schedule | Every 6 hours (or your preference) |
+
+**Via direct access (LAN or VPN):**
+
+| Setting | Value |
+|---------|-------|
+| URL | `http://<ha-ip>:8099/api/ingest` |
 | Method | POST |
 | Headers | `Authorization: Bearer <your_api_key>` |
 | Body | JSON |
 | Schedule | Every 6 hours (or your preference) |
-
-To find your ingress URL: check the add-on's info page in Home Assistant, or look at the URL bar when you open the add-on's web UI.
 
 ## API Endpoints
 
