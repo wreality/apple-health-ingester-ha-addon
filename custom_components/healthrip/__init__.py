@@ -83,8 +83,8 @@ def build_points(metrics: list[dict]) -> list[Point]:
 class HealthIngestView(HomeAssistantView):
     """Handle POST requests with Apple Health data."""
 
-    url = "/api/health_ingester/ingest"
-    name = "api:health_ingester:ingest"
+    url = "/api/healthrip/ingest"
+    name = "api:healthrip:ingest"
     requires_auth = True
 
     def __init__(self, config_data: dict) -> None:
@@ -138,7 +138,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Health Data Ingester from a config entry."""
     hass.http.register_view(HealthIngestView(dict(entry.data)))
     _LOGGER.info(
-        "Health Data Ingester ready at /api/health_ingester/ingest"
+        "Health Data Ingester ready at /api/healthrip/ingest"
     )
     return True
 

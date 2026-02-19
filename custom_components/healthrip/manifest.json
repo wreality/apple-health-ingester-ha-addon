@@ -1,5 +1,5 @@
 {
-  "domain": "health_ingester",
+  "domain": "healthrip",
   "name": "Health Data Ingester",
   "codeowners": ["@wreality"],
   "config_flow": true,

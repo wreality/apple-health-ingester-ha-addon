@@ -1,4 +1,4 @@
-DOMAIN = "health_ingester"
+DOMAIN = "healthrip"
 
 CONF_INFLUXDB_URL = "influxdb_url"
 CONF_INFLUXDB_TOKEN = "influxdb_token"

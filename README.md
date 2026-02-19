@@ -33,12 +33,12 @@ A Home Assistant custom integration that receives Apple Health data from the [He
 
 | Setting | Value |
 |---------|-------|
-| URL | `https://<nabu-casa-url>/api/health_ingester/ingest` |
+| URL | `https://<nabu-casa-url>/api/healthrip/ingest` |
 | Method | POST |
 | Headers | `Authorization: Bearer <ha_long_lived_token>` |
 | Body | JSON |
 
-For LAN access, use `http://<ha-ip>:8123/api/health_ingester/ingest`.
+For LAN access, use `http://<ha-ip>:8123/api/healthrip/ingest`.
 
 ## Security
 
