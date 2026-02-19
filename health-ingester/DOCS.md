@@ -27,114 +27,77 @@ In the add-on config:
 | InfluxDB Token | The write-only token from step 2 |
 | InfluxDB Organization | `homeassistant` (default InfluxDB org in HA) |
 | InfluxDB Bucket | `health` |
-| API Key | A secret string of your choice — used to authenticate requests from the iOS app |
 
-### 4. Remote Access via Nabu Casa Webhook
+### 4. HA Long-Lived Access Token
 
-To receive data from the Health Auto Export app remotely (outside your LAN), set up an HA webhook that forwards to the add-on.
+1. In HA, go to your **Profile** (click your name in the sidebar)
+2. Scroll to **Long-Lived Access Tokens** → **Create Token**
+3. Name it "Health Auto Export" and copy the token
 
-**Step 1:** Add a `rest_command` to your `configuration.yaml`:
+### 5. Find Your Ingress URL
 
-```yaml
-rest_command:
-  forward_health_data:
-    url: "http://localhost:8099/api/ingest"
-    method: POST
-    headers:
-      Authorization: "Bearer YOUR_API_KEY"
-      Content-Type: "application/json"
-    payload: '{{ trigger_data }}'
-    content_type: "application/json"
+The add-on is accessible through HA ingress. To find the URL:
+
+1. Open the add-on in HA (Settings → Add-ons → Health Data Ingester)
+2. Click **Open Web UI** — note the URL in your browser
+3. The ingress URL looks like: `https://<your-ha>/api/hassio_ingress/<token>/`
+
+Your ingest endpoint is that URL with `/ingest` appended:
+```
+https://<your-ha>/api/hassio_ingress/<token>/ingest
 ```
 
-**Step 2:** Create an automation (Settings → Automations → Create):
-
-```yaml
-alias: Health Data Webhook
-trigger:
-  - platform: webhook
-    webhook_id: health_data_ingest
-    allowed_methods:
-      - POST
-    local_only: false
-action:
-  - service: rest_command.forward_health_data
-    data:
-      trigger_data: "{{ trigger.data | tojson }}"
-mode: single
+This works through Nabu Casa too:
+```
+https://<nabu-casa-url>/api/hassio_ingress/<token>/ingest
 ```
 
-**Step 3:** Restart HA to load the `rest_command`.
-
-Your webhook URL is now:
-```
-https://<your-nabu-casa-url>/api/webhook/health_data_ingest
-```
-
-### 5. Health Auto Export iOS App
+### 6. Health Auto Export iOS App
 
 In the app, configure a REST API automation:
 
-**Via Nabu Casa webhook (remote):**
-
 | Setting | Value |
 |---------|-------|
-| URL | `https://<nabu-casa-url>/api/webhook/health_data_ingest` |
+| URL | `https://<nabu-casa-url>/api/hassio_ingress/<token>/ingest` |
 | Method | POST |
-| Headers | _(none needed — webhook ID acts as auth)_ |
+| Headers | `Authorization: Bearer <ha_long_lived_token>` |
 | Body | JSON |
 | Schedule | Every 6 hours (or your preference) |
 
-**Via direct access (LAN or VPN):**
+## Authentication
 
-| Setting | Value |
-|---------|-------|
-| URL | `http://<ha-ip>:8099/api/ingest` |
-| Method | POST |
-| Headers | `Authorization: Bearer <your_api_key>` |
-| Body | JSON |
-| Schedule | Every 6 hours (or your preference) |
+This add-on uses **HA ingress** for authentication. No separate API key is needed — HA authenticates all requests before they reach the add-on. The HA long-lived access token in the `Authorization` header provides the auth.
+
+No ports are exposed on the host. All traffic flows through HA's ingress proxy.
 
 ## API Endpoints
 
-### POST /api/ingest
+### POST /ingest
 
 Accepts the Health Auto Export JSON payload and writes all metrics to InfluxDB.
-
-**Headers:**
-- `Authorization: Bearer <api_key>` or `X-API-Key: <api_key>`
-- `Content-Type: application/json`
 
 **Response:**
 ```json
 {"status": "ok", "points_written": 523}
 ```
 
-### GET /api/health
+### GET /
 
-Simple healthcheck endpoint. No authentication required.
+Simple healthcheck endpoint.
 
 **Response:**
 ```json
 {"status": "ok"}
 ```
 
-## Testing
-
-```bash
-curl -X POST http://<ha-ip>:8099/api/ingest \
-  -H "Authorization: Bearer <api_key>" \
-  -H "Content-Type: application/json" \
-  -d '{"data":{"metrics":[{"name":"step_count","units":"count","data":[{"date":"2026-01-19 00:00:00 -0500","qty":5000,"source":"iPhone"}]}]}}'
-```
-
 ## Security
 
 This add-on is **write-only** by design:
+- All requests authenticated by Home Assistant (ingress)
+- No ports exposed on the host network
 - No endpoints exist to query or read back health data
 - The InfluxDB token should be scoped to write-only access
-- All ingest requests require a valid API key
-- No InfluxDB query API is proxied
+- Accessible remotely via Nabu Casa with end-to-end encryption
 
 ## InfluxDB Schema
 

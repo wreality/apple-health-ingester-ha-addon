@@ -6,8 +6,8 @@ A Home Assistant add-on that receives Apple Health data from the [Health Auto Ex
 
 - **Write-only** — accepts health data ingestion, never exposes existing data
 - **Generic metric handling** — supports all Apple Health metrics without special-casing
-- **HA Ingress support** — accessible remotely via Nabu Casa without exposing ports
-- **Simple auth** — Bearer token authentication on the ingest endpoint
+- **HA Ingress** — no exposed ports; all traffic authenticated by Home Assistant
+- **Nabu Casa ready** — accessible remotely with a long-lived access token
 
 ## Installation
 
@@ -30,43 +30,24 @@ A Home Assistant add-on that receives Apple Health data from the [Health Auto Ex
 | `influxdb_token` | Write-only API token for InfluxDB |
 | `influxdb_org` | InfluxDB organization (default: `homeassistant`) |
 | `influxdb_bucket` | Target bucket name (default: `health`) |
-| `api_key` | Bearer token to authenticate incoming requests |
 
 ## Health Auto Export App Setup
 
-In the iOS app, configure a REST API automation:
+1. Create a **long-lived access token** in HA (Profile → Long-Lived Access Tokens)
+2. Find your **ingress URL** by opening the add-on's Web UI and noting the URL
+3. In the iOS app, configure a REST API automation:
 
 | Setting | Value |
 |---------|-------|
-| URL | `https://<nabu-casa-url>/api/hassio_ingress/<token>/api/ingest` |
+| URL | `https://<nabu-casa-url>/api/hassio_ingress/<token>/ingest` |
 | Method | POST |
-| Headers | `Authorization: Bearer <your_api_key>` |
+| Headers | `Authorization: Bearer <ha_long_lived_token>` |
 | Body | JSON |
-
-## API Endpoints
-
-### `POST /api/ingest`
-
-Accepts the Health Auto Export JSON payload. Requires authentication.
-
-```json
-{"status": "ok", "points_written": 856}
-```
-
-### `GET /api/health`
-
-Healthcheck endpoint. No authentication required.
-
-## InfluxDB Schema
-
-- **Measurement**: metric name (e.g., `active_energy`, `heart_rate`, `sleep_analysis`)
-- **Tags**: `source` (device), `units`, sleep time strings
-- **Fields**: all numeric values from each data point
-- **Timestamp**: parsed from the `date` field
 
 ## Security
 
-- No query/read endpoints exist
-- InfluxDB token should be scoped to write-only
-- All ingest requests require a valid API key
-- No InfluxDB query API is proxied
+- **No exposed ports** — all traffic flows through HA ingress
+- **HA authentication** — every request must carry a valid HA access token
+- **Write-only** — no endpoints exist to query or read back health data
+- **InfluxDB token** should be scoped to write-only access
+- **End-to-end encryption** via Nabu Casa when accessed remotely
