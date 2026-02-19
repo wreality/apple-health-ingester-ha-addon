@@ -1,5 +1,5 @@
 name: Health Data Ingester
-version: "1.0.0"
+version: "1.1.0"
 slug: health_ingester
 description: Receives Apple Health data from Health Auto Export and writes to InfluxDB
 url: https://github.com/wreality/apple-health-ingester-ha-addon
