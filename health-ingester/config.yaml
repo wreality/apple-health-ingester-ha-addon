@@ -1,0 +1,27 @@
+name: Health Data Ingester
+version: "1.0.0"
+slug: health_ingester
+description: Receives Apple Health data from Health Auto Export and writes to InfluxDB
+url: ""
+arch:
+  - amd64
+  - aarch64
+startup: application
+boot: auto
+ingress: true
+ingress_port: 8099
+panel_icon: mdi:heart-pulse
+ports:
+  8099/tcp: null
+options:
+  influxdb_url: "http://a0d7b954-influxdb:8086"
+  influxdb_token: ""
+  influxdb_org: "homeassistant"
+  influxdb_bucket: "health"
+  api_key: ""
+schema:
+  influxdb_url: url
+  influxdb_token: password
+  influxdb_org: str
+  influxdb_bucket: str
+  api_key: password
