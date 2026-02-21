@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+import time
+from datetime import datetime, timezone
 
 from aiohttp import web
 from homeassistant.components.http import HomeAssistantView
@@ -23,9 +24,9 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 # Fields that are not numeric values — skip when building InfluxDB points
-SKIP_FIELDS = {"date", "source"}
+SKIP_FIELDS = {"date", "source", "startDate"}
 # String-valued fields to store as tags instead of fields
-STRING_FIELDS = {"inBedStart", "inBedEnd", "sleepStart", "sleepEnd"}
+STRING_FIELDS = {"inBedStart", "inBedEnd", "sleepStart", "sleepEnd", "value", "endDate", "start", "end", "context"}
 
 
 def parse_timestamp(date_str: str) -> datetime:
@@ -44,7 +45,7 @@ def build_points(metrics: list[dict]) -> list[Point]:
         units = metric.get("units", "")
 
         for dp in metric.get("data", []):
-            date_str = dp.get("date")
+            date_str = dp.get("date") or dp.get("startDate")
             if not date_str:
                 continue
 
@@ -93,33 +94,46 @@ class HealthIngestView(HomeAssistantView):
 
     async def post(self, request: web.Request) -> web.Response:
         """Handle incoming health data."""
+        request_start = time.monotonic()
+
         try:
             body = await request.json()
         except Exception:
+            self._write_telemetry_safe(request, 0, 0, 0, error="invalid_json")
             return self.json({"error": "Invalid JSON"}, status_code=400)
 
         data = body.get("data", {})
         metrics = data.get("metrics", [])
 
         if not metrics:
+            elapsed = time.monotonic() - request_start
+            self._write_telemetry_safe(request, 0, 0, elapsed)
             return self.json({"status": "ok", "points_written": 0})
 
         points = build_points(metrics)
         if not points:
+            elapsed = time.monotonic() - request_start
+            self._write_telemetry_safe(request, len(metrics), 0, elapsed)
             return self.json({"status": "ok", "points_written": 0})
 
         try:
             hass = request.app["hass"]
-            result = await hass.async_add_executor_job(
+            write_start = time.monotonic()
+            await hass.async_add_executor_job(
                 self._write_points, points
             )
+            write_dur = time.monotonic() - write_start
         except Exception as err:
             _LOGGER.error("InfluxDB write failed: %s", err)
+            elapsed = time.monotonic() - request_start
+            self._write_telemetry_safe(request, len(metrics), len(points), elapsed, error=type(err).__name__)
             return self.json(
                 {"error": f"InfluxDB write failed: {err}"}, status_code=502
             )
 
-        _LOGGER.info("Wrote %d points across %d metrics", len(points), len(metrics))
+        elapsed = time.monotonic() - request_start
+        _LOGGER.info("Wrote %d points across %d metrics (%.1fs)", len(points), len(metrics), elapsed)
+        self._write_telemetry_safe(request, len(metrics), len(points), elapsed, write_dur)
         return self.json({"status": "ok", "points_written": len(points)})
 
     def _write_points(self, points: list[Point]) -> None:
@@ -132,6 +146,57 @@ class HealthIngestView(HomeAssistantView):
         write_api = client.write_api(write_options=SYNCHRONOUS)
         write_api.write(bucket=self._config[CONF_INFLUXDB_BUCKET], record=points)
         client.close()
+
+    def _write_telemetry_safe(
+        self,
+        request: web.Request,
+        metric_count: int,
+        point_count: int,
+        total_dur: float,
+        write_dur: float = 0.0,
+        error: str = "",
+    ) -> None:
+        """Write ingest telemetry to InfluxDB. Failures are logged but not raised."""
+        try:
+            hass = request.app["hass"]
+            hass.async_add_executor_job(
+                self._write_telemetry, metric_count, point_count, total_dur, write_dur, error
+            )
+        except Exception as err:
+            _LOGGER.debug("Failed to schedule telemetry write: %s", err)
+
+    def _write_telemetry(
+        self,
+        metric_count: int,
+        point_count: int,
+        total_dur: float,
+        write_dur: float,
+        error: str,
+    ) -> None:
+        """Write ingest telemetry to InfluxDB (blocking, run in executor)."""
+        now = datetime.now(timezone.utc)
+        telemetry = (
+            Point("ingest_request")
+            .field("points", float(point_count))
+            .field("metrics", float(metric_count))
+            .field("total_duration_s", round(total_dur, 3))
+            .field("write_duration_s", round(write_dur, 3))
+            .field("success", 0.0 if error else 1.0)
+            .time(now, WritePrecision.S)
+        )
+        if error:
+            telemetry = telemetry.tag("error", error)
+        try:
+            client = InfluxDBClient(
+                url=self._config[CONF_INFLUXDB_URL],
+                token=self._config[CONF_INFLUXDB_TOKEN],
+                org=self._config[CONF_INFLUXDB_ORG],
+            )
+            write_api = client.write_api(write_options=SYNCHRONOUS)
+            write_api.write(bucket=self._config[CONF_INFLUXDB_BUCKET], record=[telemetry])
+            client.close()
+        except Exception as err:
+            _LOGGER.debug("Failed to write telemetry: %s", err)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

@@ -1,0 +1,20 @@
+[Unit]
+Description=Health Auto Export historical backfill daemon
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/adamsb/anytype-pki/ha-health-ingester/tools
+ExecStart=/usr/bin/python3 /home/adamsb/anytype-pki/ha-health-ingester/tools/backfill_health.py --daemon
+EnvironmentFile=/home/adamsb/anytype-pki/ha-health-ingester/tools/.env
+Restart=on-failure
+RestartSec=30
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=health-backfill
+
+Environment=HOME=/home/adamsb
+
+[Install]
+WantedBy=default.target
