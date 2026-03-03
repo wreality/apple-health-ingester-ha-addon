@@ -6,6 +6,7 @@ dependency on influxdb-client which has import issues on Python 3.13.
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 from datetime import datetime, timezone
@@ -138,8 +139,11 @@ class HealthIngestView(HomeAssistantView):
         request_start = time.monotonic()
 
         try:
-            body = await request.json()
+            raw = await request.read()
+            body = json.loads(raw)
         except Exception:
+            _LOGGER.error("Failed to parse request body (content-type: %s, length: %s)",
+                          request.content_type, request.content_length)
             await self._write_telemetry(0, 0, 0, error="invalid_json")
             return self.json({"error": "Invalid JSON"}, status_code=400)
 
