@@ -139,11 +139,15 @@ class HealthIngestView(HomeAssistantView):
         request_start = time.monotonic()
 
         try:
+            # Health Auto Export can send large payloads (20MB+)
+            request._client_max_size = 50 * 1024 * 1024  # 50 MB
             raw = await request.read()
+            _LOGGER.debug("Received %d bytes (content-length: %s)", len(raw), request.content_length)
             body = json.loads(raw)
-        except Exception:
-            _LOGGER.error("Failed to parse request body (content-type: %s, length: %s)",
-                          request.content_type, request.content_length)
+        except Exception as exc:
+            _LOGGER.error("Failed to parse request body: %s: %s (content-type: %s, content-length: %s, bytes read: %d)",
+                          type(exc).__name__, exc, request.content_type, request.content_length,
+                          len(raw) if 'raw' in dir() else -1)
             await self._write_telemetry(0, 0, 0, error="invalid_json")
             return self.json({"error": "Invalid JSON"}, status_code=400)
 
